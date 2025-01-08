@@ -1,0 +1,83 @@
+library(ggplot2)
+library(dplyr)
+
+# Data
+Wasabi_Fresh_1 <- c(346666.66, 1180000)
+Wasabi_Fresh_2 <- c(259666.66, 234666.66)
+Wasabi_Frozen_1 <- c(1406666.66, 1066666.66)
+Wasabi_Frozen_2 <- c(462666.66, 390000)
+
+data <- data.frame(
+  Value = c(Wasabi_Fresh_1, Wasabi_Frozen_1, Wasabi_Fresh_2, Wasabi_Frozen_2),
+  Group = rep(c("Fresh 1", "Frozen 1", "Fresh 2", "Frozen 2"), each = 2)
+)
+
+summary_stats <- data %>%
+  group_by(Group) %>%
+  summarise(
+    mean_value = mean(Value),
+    sd_value = sd(Value),
+    n = n(),
+    se_value = sd_value / sqrt(n),
+    lower_95ci = mean_value - qt(0.975, df = n - 1) * se_value,
+    upper_95ci = mean_value + qt(0.975, df = n - 1) * se_value
+  )
+
+cat("Summary Statistics:\n")
+print(summary_stats)
+
+anova_fresh1_frozen1 <- aov(Value ~ Group, data = data %>% filter(Group %in% c("Fresh 1", "Frozen 1")))
+anova_fresh2_frozen2 <- aov(Value ~ Group, data = data %>% filter(Group %in% c("Fresh 2", "Frozen 2")))
+
+cat("\nANOVA Results for Fresh 1 vs Frozen 1:\n")
+print(summary(anova_fresh1_frozen1))
+cat("\nANOVA Results for Fresh 2 vs Frozen 2:\n")
+print(summary(anova_fresh2_frozen2))
+
+combined_summary <- data.frame(
+  Group = c("Fresh (Avg)", "Frozen (Avg)"),
+  mean_value = c(
+    mean(summary_stats %>% filter(grepl("Fresh", Group)) %>% pull(mean_value)),
+    mean(summary_stats %>% filter(grepl("Frozen", Group)) %>% pull(mean_value))
+  ),
+  se_value = c(
+    sqrt(sum((summary_stats %>% filter(grepl("Fresh", Group)) %>% pull(se_value))^2)),
+    sqrt(sum((summary_stats %>% filter(grepl("Frozen", Group)) %>% pull(se_value))^2))
+  )
+)
+
+default_theme <- theme_minimal() +
+  theme(
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    legend.position = "none"
+  )
+
+plots <- lapply(c("Fresh 1 vs Frozen 1", "Fresh 2 vs Frozen 2", "Combined Fresh vs Frozen"), function(title) {
+  if (title == "Combined Fresh vs Frozen") {
+    subset_data <- combined_summary
+    title <- "Fresh vs Frozen"  
+  } else {
+    groups <- unlist(strsplit(title, " vs "))
+    subset_data <- summary_stats %>% filter(Group %in% groups)
+  }
+  
+  ggplot(subset_data, aes(x = Group, y = mean_value)) +
+    geom_bar(stat = "identity", aes(fill = Group), width = 0.6, show.legend = FALSE) +
+    geom_errorbar(
+      aes(ymin = mean_value - se_value, ymax = mean_value + se_value),
+      width = 0.2
+    ) +
+    scale_fill_manual(values = c("Fresh 1" = "green", "Frozen 1" = "lightblue", 
+                                 "Fresh 2" = "green", "Frozen 2" = "lightblue", 
+                                 "Fresh (Avg)" = "green", "Frozen (Avg)" = "lightblue")) +
+    labs(
+      title = title,
+      y = "Transformation Efficiency (CFU/\u00b5g)" 
+    ) +
+    default_theme +
+    theme(axis.title.x = element_blank()) 
+})
+
+lapply(plots, print)
