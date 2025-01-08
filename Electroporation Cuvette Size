@@ -1,0 +1,79 @@
+library(ggplot2)
+library(dplyr)
+
+CFU <- c(0, 0, 0, 75e3, 1.15e5, 2.355e5, 22.6665e3, 21.3335e3, 90.6665e3, 
+         71.2e3, 1.0e3, 69.0e3, 1.388e6, 9.16e5, 4.77e6, 1.308e6, 3.56e5, 1.38e6)
+
+Plasmid <- rep(c("mScarlet", "pKM461"), each = 9)
+CuvetteSize <- rep(c("0.1cm", "0.2cm", "0.4cm"), each = 3, times = 2)
+Replicate <- rep(c(1, 2, 3), 6)
+
+data <- data.frame(CFU, Plasmid, CuvetteSize, Replicate)
+
+summary_stats <- data %>%
+  group_by(Plasmid, CuvetteSize) %>%
+  summarise(
+    mean_CFU = mean(CFU),
+    sd_CFU = sd(CFU),
+    n = n(),
+    se = sd_CFU / sqrt(n)
+  ) %>%
+  ungroup()
+
+print(summary_stats)
+
+plot_individual_replicate <- function(plasmid_data, replicate_number, title, color) {
+  ggplot(plasmid_data %>% filter(Replicate == replicate_number), 
+         aes(x = CuvetteSize, y = CFU)) +
+    geom_bar(stat = "identity", fill = color, width = 0.6) +
+    theme_minimal() +
+    labs(title = title, x = "Cuvette Size", y = "Transformation Efficiency (CFU/µg)") +
+    theme(plot.title = element_text(hjust = 0.5))
+}
+
+plot_mean_with_error <- function(stats_data, title, color) {
+  ggplot(stats_data, aes(x = CuvetteSize, y = mean_CFU)) +
+    geom_bar(stat = "identity", fill = color, width = 0.6) +
+    geom_errorbar(aes(ymin = mean_CFU - se, ymax = mean_CFU + se), width = 0.2) +
+    theme_minimal() +
+    labs(title = title, x = "Cuvette Size", y = "Transformation Efficiency (CFU/µg)") +
+    theme(plot.title = element_text(hjust = 0.5))
+}
+
+combined_plot <- ggplot(summary_stats, aes(x = CuvetteSize, y = mean_CFU, fill = Plasmid)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.6) +
+  geom_errorbar(aes(ymin = mean_CFU - se, ymax = mean_CFU + se), 
+                width = 0.2, position = position_dodge(0.6)) +
+  scale_fill_manual(values = c("mScarlet" = "tomato", "pKM461" = "skyblue")) +
+  theme_minimal() +
+  labs(title = "Transformation Efficiency for mScarlet and pKM461", 
+       x = "Cuvette Size", y = "Transformation Efficiency (CFU/µg)", fill = "Plasmid") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+interaction_plot <- ggplot(summary_stats, aes(x = CuvetteSize, y = mean_CFU, group = Plasmid, color = Plasmid)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("mScarlet" = "tomato", "pKM461" = "skyblue")) +
+  theme_minimal() +
+  labs(title = "Interaction Plot: Cuvette Size Vs Transformation Efficiency",
+       x = "Cuvette Size", y = "Transformation Efficiency (CFU/µg)", color = "Plasmid") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+for (i in 1:3) {
+  print(plot_individual_replicate(data %>% filter(Plasmid == "mScarlet"), i, 
+                                  paste("mScarlet - Replicate", i), "tomato"))
+}
+
+for (i in 1:3) {
+  print(plot_individual_replicate(data %>% filter(Plasmid == "pKM461"), i, 
+                                  paste("pKM461 - Replicate", i), "skyblue"))
+}
+
+print(plot_mean_with_error(summary_stats %>% filter(Plasmid == "mScarlet"), 
+                           "Transformation Efficiency for mScarlet", "tomato"))
+
+print(plot_mean_with_error(summary_stats %>% filter(Plasmid == "pKM461"), 
+                           "Transformation Efficiency for pKM461", "skyblue"))
+
+print(combined_plot)
+print(interaction_plot)
