@@ -1,0 +1,93 @@
+library(ggplot2)
+library(dplyr)
+
+Plasmid <- rep(c("mScarlet", "pKM461"), each = 15)
+Concentration <- factor(rep(c("10ng", "100ng", "300ng", "500ng", "1µg"), times = 6), 
+                        levels = c("10ng", "100ng", "300ng", "500ng", "1µg"))
+CFU <- c(
+  3.8e5, 9.14e5, 22.665e3, 6.68e5, 1.324e5, 
+  0, 1.4e4, 21.3335e3, 1.66e5, 3.76e4,       
+  3.0e5, 2.06e5, 90.6665e3, 4.68e4, 3.76e4,  
+  4.0e5, 3.694e6, 1.308e6, 8.34e5, 4.096e5,  
+  0, 1.134e6, 3.56e5, 4.732e5, 4.442e5,      
+  1.16e6, 4.88e5, 1.38e6, 2.22e5, 1.302e5    
+)
+
+Replicate <- rep(rep(1:3, each = 5), times = 2)  # Correctly map replicates
+
+data <- data.frame(Plasmid, Concentration, CFU, Replicate)
+
+summary_stats <- data %>%
+  group_by(Plasmid, Concentration) %>%
+  summarise(
+    mean_CFU = mean(CFU),
+    sd_CFU = sd(CFU),
+    n = n(),
+    se = sd_CFU / sqrt(n),
+    lower_CI = mean_CFU - qt(0.975, df = n - 1) * se,
+    upper_CI = mean_CFU + qt(0.975, df = n - 1) * se
+  ) %>%
+  ungroup()
+
+print(summary_stats)
+
+plot_individual_replicate <- function(data, replicate_number, title, color) {
+  ggplot(data %>% filter(Replicate == replicate_number), 
+         aes(x = Concentration, y = CFU)) +
+    geom_bar(stat = "identity", fill = color, width = 0.6) +
+    theme_minimal() +
+    labs(title = title, x = "Plasmid Concentration", y = "Transformation Efficiency (CFU/µg)") +
+    theme(plot.title = element_text(hjust = 0.5))
+}
+
+for (i in 1:3) {
+  print(plot_individual_replicate(data %>% filter(Plasmid == "mScarlet"), i, 
+                                  paste("mScarlet - Replicate", i), "tomato"))
+}
+
+for (i in 1:3) {
+  print(plot_individual_replicate(data %>% filter(Plasmid == "pKM461"), i, 
+                                  paste("pKM461 - Replicate", i), "skyblue"))
+}
+
+plot_mScarlet <- ggplot(summary_stats %>% filter(Plasmid == "mScarlet"), 
+                        aes(x = Concentration, y = mean_CFU)) +
+  geom_bar(stat = "identity", fill = "tomato", width = 0.6) +
+  geom_errorbar(aes(ymin = mean_CFU - se, ymax = mean_CFU + se), width = 0.2) +
+  theme_minimal() +
+  labs(title = "Transformation Efficiency for mScarlet", 
+       x = "Plasmid Concentration", y = "Transformation Efficiency (CFU/µg)") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+plot_pKM461 <- ggplot(summary_stats %>% filter(Plasmid == "pKM461"), 
+                      aes(x = Concentration, y = mean_CFU)) +
+  geom_bar(stat = "identity", fill = "skyblue", width = 0.6) +
+  geom_errorbar(aes(ymin = mean_CFU - se, ymax = mean_CFU + se), width = 0.2) +
+  theme_minimal() +
+  labs(title = "Transformation Efficiency for pKM461", 
+       x = "Plasmid Concentration", y = "Transformation Efficiency (CFU/µg)") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+combined_plot <- ggplot(summary_stats, aes(x = Concentration, y = mean_CFU, fill = Plasmid)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.6) +
+  geom_errorbar(aes(ymin = mean_CFU - se, ymax = mean_CFU + se), 
+                width = 0.2, position = position_dodge(0.6)) +
+  scale_fill_manual(values = c("mScarlet" = "tomato", "pKM461" = "skyblue")) +
+  theme_minimal() +
+  labs(title = "Transformation Efficiency for mScarlet and pKM461", 
+       x = "Plasmid Concentration", y = "Transformation Efficiency (CFU/µg)", fill = "Plasmid") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+interaction_plot <- ggplot(summary_stats, aes(x = Concentration, y = mean_CFU, group = Plasmid, color = Plasmid)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("mScarlet" = "tomato", "pKM461" = "skyblue")) +
+  theme_minimal() +
+  labs(title = "Interaction Plot: Plasmid Concentration Vs Transformation Efficiency",
+       x = "Plasmid Concentration", y = "Transformation Efficiency (CFU/µg)", color = "Plasmid") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+print(plot_mScarlet)
+print(plot_pKM461)
+print(combined_plot)
+print(interaction_plot)
