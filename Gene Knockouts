@@ -1,0 +1,74 @@
+library(ggplot2)
+library(dplyr)
+
+data <- data.frame(
+  Protocol = c(rep("Original", 10), rep("Alternative", 24)),
+  Gene = c(rep("RecR", 5), rep("HSD", 5), rep("RecR", 8), rep("HSD", 8), rep("GlgA", 8)),
+  Value = c(66.66, 0, 6933.33, 2333.33, 7400, 0, 2733.33, 266.66, 600, 800,
+            6066.66, 66.66, 1533.33, 1800, 66.67, 466.66, 10533.33, 11600,
+            466.66, 800, 133.33, 733.33, 333.33, 933.33, 14066.66, 200,
+            200, 133.33, 200, 200, 1000, 466.66, 1066.66, 533.33)
+)
+
+stats <- data %>%
+  group_by(Protocol, Gene) %>%
+  summarize(
+    Mean = mean(Value),
+    SD = sd(Value),
+    N = n(),
+    SE = SD / sqrt(N),
+    `95% CI Lower` = Mean - qt(0.975, df = N - 1) * SE,
+    `95% CI Upper` = Mean + qt(0.975, df = N - 1) * SE,
+    .groups = "drop"
+  )
+
+print(stats)
+
+recR_data <- data %>% filter(Gene == "RecR")
+anova_recR <- aov(Value ~ Protocol, data = recR_data)
+summary_recR <- summary(anova_recR)
+print("ANOVA Results for RecR:")
+print(summary_recR)
+
+hsd_data <- data %>% filter(Gene == "HSD")
+anova_hsd <- aov(Value ~ Protocol, data = hsd_data)
+summary_hsd <- summary(anova_hsd)
+print("ANOVA Results for HSD:")
+print(summary_hsd)
+
+recR_plot <- ggplot(recR_data, aes(x = Protocol, y = Value, fill = Protocol)) +
+  geom_bar(stat = "summary", fun = "mean", position = "dodge") +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2, position = position_dodge(0.9)) +
+  labs(
+    title = "RecR Knockouts: Original vs Alternative Protocol",
+    y = "Transformation Efficiency (CFU/µg)",
+    x = "Protocol"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+hsd_plot <- ggplot(hsd_data, aes(x = Protocol, y = Value, fill = Protocol)) +
+  geom_bar(stat = "summary", fun = "mean", position = "dodge") +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2, position = position_dodge(0.9)) +
+  labs(
+    title = "HSD Knockouts: Original vs Alternative Protocol",
+    y = "Transformation Efficiency (CFU/µg)",
+    x = "Protocol"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+combined_plot <- ggplot(data, aes(x = Gene, y = Value, fill = Protocol)) +
+  geom_bar(stat = "summary", fun = "mean", position = "dodge") +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.2, position = position_dodge(0.9)) +
+  labs(
+    title = "Gene Knockout Efficiency",
+    y = "Transformation Efficiency (CFU/µg)",
+    x = "Gene"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+print(recR_plot)
+print(hsd_plot)
+print(combined_plot)
