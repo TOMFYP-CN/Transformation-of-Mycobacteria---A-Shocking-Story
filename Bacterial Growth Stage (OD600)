@@ -1,0 +1,103 @@
+library(dplyr)
+library(ggplot2)
+
+data <- data.frame(
+  OD600 = c(rep(0.4, 8), rep(0.6, 8), rep(0.8, 11), rep(1.0, 8)),
+  Plasmid = c(rep("pKM461", 4), rep("mScarlet", 4), 
+              rep("pKM461", 4), rep("mScarlet", 4), 
+              rep("pKM461", 5), rep("mScarlet", 6), 
+              rep("pKM461", 4), rep("mScarlet", 4)),
+  Efficiency = c(
+    7.7067e5, 1.8133e6, 6.32e5, 1.041e6, 4.666e4, 4.0e4, 4.0e4, 2.666e4,
+    1.12e6, 1.4267e6, 8.96e5, 1.733e6, 9.333e4, 6.667e4, 1.30667e5, 2.0e5,
+    5.06e5, 2.27e6, 4.52e5, 1.38e6, 4.77e6, 6.0e4, 9.0e4, 5.0e4, 1.8e5, 7.1e4, 4.0e5,
+    9.52e5, 1.6267e6, 7.92e5, 1.28e6, 3.5067e5, 4.4e5, 2.92e5, 6.533e5
+  )
+)
+
+summary_data <- data %>%
+  group_by(OD600, Plasmid) %>%
+  summarise(
+    Mean_Efficiency = mean(Efficiency),
+    SD = sd(Efficiency),
+    SE = SD / sqrt(n()),
+    n = n(),
+    CI_Lower = Mean_Efficiency - qt(0.975, df = n - 1) * SE,
+    CI_Upper = Mean_Efficiency + qt(0.975, df = n - 1) * SE
+  ) %>%
+  ungroup()
+
+print(summary_data)
+
+plot_comparison_OD600 <- function(data, OD_value) {
+  ggplot(data %>% filter(OD600 == OD_value), aes(x = Plasmid, y = Efficiency, fill = Plasmid)) +
+    geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+    scale_fill_manual(values = c("pKM461" = "skyblue", "mScarlet" = "tomato")) +
+    labs(title = paste("Transformation Efficiency at OD600 =", OD_value), 
+         x = "Plasmid", y = "Transformation Efficiency (CFU/µg DNA)") +
+    theme_minimal() +
+    theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+    scale_y_continuous(labels = scales::comma) # Ensures no scientific notation
+}
+
+for (od in unique(data$OD600)) {
+  print(plot_comparison_OD600(data, od))
+}
+
+pKM461_plot <- ggplot(summary_data %>% filter(Plasmid == "pKM461"), aes(x = as.factor(OD600), y = Mean_Efficiency, fill = Plasmid)) +
+  geom_bar(stat = "identity", width = 0.7, color = NA) +
+  geom_errorbar(aes(ymin = Mean_Efficiency - SE, ymax = Mean_Efficiency + SE), width = 0.2) +
+  scale_fill_manual(values = c("skyblue")) +
+  labs(title = "pKM461 Transformation Efficiency by Bacterial Growth Stage", 
+       x = "Bacterial Growth Stage (OD600)", y = "Mean Transformation Efficiency (CFU/µg DNA)") +
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5))
+
+mScarlet_plot <- ggplot(summary_data %>% filter(Plasmid == "mScarlet"), aes(x = as.factor(OD600), y = Mean_Efficiency, fill = Plasmid)) +
+  geom_bar(stat = "identity", width = 0.7, color = NA) +
+  geom_errorbar(aes(ymin = Mean_Efficiency - SE, ymax = Mean_Efficiency + SE), width = 0.2) +
+  scale_fill_manual(values = c("tomato")) +
+  labs(title = "mScarlet Transformation Efficiency by Bacterial Growth Stage", 
+       x = "Bacterial Growth Stage (OD600)", y = "Mean Transformation Efficiency (CFU/µg DNA)") +
+  theme_minimal() +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5))
+
+combined_plot <- ggplot(summary_data, aes(x = as.factor(OD600), y = Mean_Efficiency, fill = Plasmid)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.7), width = 0.7, color = NA) +
+  geom_errorbar(aes(ymin = Mean_Efficiency - SE, ymax = Mean_Efficiency + SE), 
+                position = position_dodge(width = 0.7), width = 0.2) +
+  scale_fill_manual(values = c("pKM461" = "skyblue", "mScarlet" = "tomato")) +
+  labs(title = "Bacterial Growth Stage vs Transformation Efficiency for Both Plasmids", 
+       x = "Bacterial Growth Stage (OD600)", y = "Mean Transformation Efficiency (CFU/µg DNA)") +
+  theme_minimal() +
+  theme(legend.title = element_blank(), plot.title = element_text(hjust = 0.5))
+
+interaction_plot <- ggplot(summary_data, aes(x = OD600, y = Mean_Efficiency, color = Plasmid, group = Plasmid)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("pKM461" = "skyblue", "mScarlet" = "tomato")) +
+  labs(title = "Interaction Plot: Bacterial Growth Stage vs Transformation Efficiency", 
+       x = "Bacterial Growth Stage (OD600)", y = "Mean Transformation Efficiency (CFU/µg DNA)") +
+  theme_minimal() +
+  theme(legend.title = element_blank(), plot.title = element_text(hjust = 0.5))
+
+plot_individual_replicate <- function(data, title, color) {
+  ggplot(data, aes(x = as.factor(OD600), y = Efficiency, fill = as.factor(OD600))) +
+    geom_bar(stat = "identity", width = 0.7, color = NA) +
+    scale_fill_manual(values = rep(color, length(unique(data$OD600)))) +
+    labs(title = title, x = "Bacterial Growth Stage (OD600)", y = "Transformation Efficiency (CFU/µg DNA)") +
+    theme_minimal() +
+    theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+    scale_y_continuous(labels = scales::comma) # Ensures no scientific notation
+}
+
+for (plasmid in unique(data$Plasmid)) {
+  print(plot_individual_replicate(data %>% filter(Plasmid == plasmid), 
+                                  paste(plasmid, "- Individual Replicates"), 
+                                  ifelse(plasmid == "pKM461", "skyblue", "tomato")))
+}
+
+print(pKM461_plot)
+print(mScarlet_plot)
+print(combined_plot)
+print(interaction_plot)
