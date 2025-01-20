@@ -1,13 +1,14 @@
 library(ggplot2)
 library(dplyr)
+library(pwr)
 
 data <- data.frame(
   Protocol = c(rep("Original", 10), rep("Alternative", 24)),
   Gene = c(rep("RecR", 5), rep("HSD", 5), rep("RecR", 8), rep("HSD", 8), rep("GlgA", 8)),
-  Value = c(66.66, 0, 6933.33, 2333.33, 7400, 0, 2733.33, 266.66, 600, 800,
-            6066.66, 66.66, 1533.33, 1800, 66.67, 466.66, 10533.33, 11600,
-            466.66, 800, 133.33, 733.33, 333.33, 933.33, 14066.66, 200,
-            200, 133.33, 200, 200, 1000, 466.66, 1066.66, 533.33)
+  Value = c(3.33, 0, 0, 450, 370, 0, 136.66, 13.33, 30, 40,
+            303.33, 3.33, 76.66, 90, 3.33, 23.33, 526.66, 580,
+            23.33, 40, 6.66, 36.66, 16.66, 13.33, 703.33, 10,
+            10, 6.66, 10, 10, 50, 23.33, 53.33, 26.66)
 )
 
 stats <- data %>%
@@ -44,6 +45,7 @@ recR_plot <- ggplot(recR_data, aes(x = Protocol, y = Value, fill = Protocol)) +
     y = "Transformation Efficiency (CFU/µg)",
     x = "Protocol"
   ) +
+  scale_y_continuous(labels = scales::scientific) +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
 
@@ -55,6 +57,7 @@ hsd_plot <- ggplot(hsd_data, aes(x = Protocol, y = Value, fill = Protocol)) +
     y = "Transformation Efficiency (CFU/µg)",
     x = "Protocol"
   ) +
+  scale_y_continuous(labels = scales::scientific) +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
 
@@ -66,9 +69,31 @@ combined_plot <- ggplot(data, aes(x = Gene, y = Value, fill = Protocol)) +
     y = "Transformation Efficiency (CFU/µg)",
     x = "Gene"
   ) +
+  scale_y_continuous(labels = scales::scientific) +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
 
 print(recR_plot)
 print(hsd_plot)
 print(combined_plot)
+
+for (gene in c("RecR", "HSD")) {
+  gene_data <- data %>% filter(Gene == gene)
+  original <- gene_data %>% filter(Protocol == "Original") %>% pull(Value)
+  alternative <- gene_data %>% filter(Protocol == "Alternative") %>% pull(Value)
+  
+  t_test_result <- t.test(original, alternative, var.equal = FALSE)
+  
+  pooled_sd <- sqrt(((length(original) - 1) * var(original) + 
+                       (length(alternative) - 1) * var(alternative)) /
+                      (length(original) + length(alternative) - 2))
+  cohen_d <- abs(mean(original) - mean(alternative)) / pooled_sd
+  
+  pwr_result <- pwr.t.test(d = cohen_d, sig.level = 0.05, power = 0.95, type = "two.sample")
+  
+  cat("\nGene:", gene, "\n")
+  cat("Welch's T-Test:\n")
+  print(t_test_result)
+  cat("\nCohen's d:", cohen_d, "\n")
+  cat("Required sample size per group for 95% confidence and p < 0.05:", pwr_result$n, "\n")
+}
