@@ -15,39 +15,27 @@ data <- data.frame(
     rep("0.2cm", 8 + 15 + 15 + 8)
   ),
   TimeConstant = c(
-
     10.9, 16.4, 19.9, 
     9.2, 13.1, 18.1, 
     9.9, 15.6, 19.3,
-
     12.3, 16.2, 20.2,
     9.5, 14.3, 18.6,
     12.0, 16.4, 20.3,
-
     17.6, 17.4, 17.7, 16.9, 18.8, 18.4, 17.3, 18.4,
-
     16.8, 14.9, 15.6, 18.9, 18.7, 15.6, 18.9, 18.3, 18.1, 18.7, 16.2, 16.2, 14.2, 14.1, 18.9,
-
     17.8, 15.8, 17.9, 18.3, 15.2, 17.9, 18.3, 18.1, 18.3, 17.6, 16.4, 16.0, 17.0, 18.0, 17.6,
-
     16.4, 16.2, 16.9, 18.0, 17.7, 16.6, 16.0, 16.9
   ),
   CFU = c(
-
     0, 60, 3, 
     0, 50, 23, 
     0, 71, 16,
-
     242, 506, 202,
     10, 452, 274,
     270, 477, 195,
-
     NA, 52, 211, 177, 160, 349, 344, 560,
-
-    1, 0, 104, 135, 111, 91, 1, 23, 27, 7, 1, 7, 158, 174, 91,
-
+    1, 0, 0, 135, 111, 91, 1, 23, 27, 7, 1, 7, 158, 174, 91,
     0, 41, 4, 9, 12, 7, 12, 2, 11, 5, 4, 211, 3, 3, 5,
-
     3, 2, 3, 3, 15, 7, 16, 8
   )
 )
@@ -93,6 +81,7 @@ for (plasmid in plasmids) {
       x = "Time Constant (ms)",
       y = "Colony Forming Units (CFU)"
     ) +
+    scale_y_continuous(labels = scales::scientific) +  
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
 }
@@ -111,6 +100,7 @@ combined_plot <- ggplot(aggregated_data, aes(x = TimeConstant, y = Mean_CFU, col
     y = "Mean Colony Forming Units (CFU)",
     color = "Plasmid"
   ) +
+  scale_y_continuous(labels = scales::scientific) +  # Scientific notation for y-axis
   theme_minimal() +
   theme(
     plot.title = element_text(hjust = 0.5),
