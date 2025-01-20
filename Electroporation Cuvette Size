@@ -1,11 +1,12 @@
 library(ggplot2)
 library(dplyr)
+library(scales)
 
-CFU <- c(0, 0, 0, 75e3, 1.15e5, 2.355e5, 22.6665e3, 21.3335e3, 90.6665e3, 
-         71.2e3, 1.0e3, 69.0e3, 1.388e6, 9.16e5, 4.77e6, 1.308e6, 3.56e5, 1.38e6)
+CFU <- c(0, 0, 0, 25000, 38333.33, 78500, 14333.33, 37666.66, 45333.33, 
+         59333.33, 833.33, 57500, 462666.66, 305333.33, 1590000, 654000, 178000, 345000)
 
 Plasmid <- rep(c("mScarlet", "pKM461"), each = 9)
-CuvetteSize <- rep(c("0.1cm", "0.2cm", "0.4cm"), each = 3, times = 2)
+CuvetteSize <- rep(c("0.1 cm", "0.2 cm", "0.4 cm"), each = 3, times = 2)
 Replicate <- rep(c(1, 2, 3), 6)
 
 data <- data.frame(CFU, Plasmid, CuvetteSize, Replicate)
@@ -20,12 +21,11 @@ summary_stats <- data %>%
   ) %>%
   ungroup()
 
-print(summary_stats)
-
 plot_individual_replicate <- function(plasmid_data, replicate_number, title, color) {
   ggplot(plasmid_data %>% filter(Replicate == replicate_number), 
          aes(x = CuvetteSize, y = CFU)) +
     geom_bar(stat = "identity", fill = color, width = 0.6) +
+    scale_y_continuous(labels = label_scientific()) + 
     theme_minimal() +
     labs(title = title, x = "Cuvette Size", y = "Transformation Efficiency (CFU/µg)") +
     theme(plot.title = element_text(hjust = 0.5))
@@ -35,6 +35,7 @@ plot_mean_with_error <- function(stats_data, title, color) {
   ggplot(stats_data, aes(x = CuvetteSize, y = mean_CFU)) +
     geom_bar(stat = "identity", fill = color, width = 0.6) +
     geom_errorbar(aes(ymin = mean_CFU - se, ymax = mean_CFU + se), width = 0.2) +
+    scale_y_continuous(labels = label_scientific()) + # Scientific notation
     theme_minimal() +
     labs(title = title, x = "Cuvette Size", y = "Transformation Efficiency (CFU/µg)") +
     theme(plot.title = element_text(hjust = 0.5))
@@ -44,6 +45,7 @@ combined_plot <- ggplot(summary_stats, aes(x = CuvetteSize, y = mean_CFU, fill =
   geom_bar(stat = "identity", position = "dodge", width = 0.6) +
   geom_errorbar(aes(ymin = mean_CFU - se, ymax = mean_CFU + se), 
                 width = 0.2, position = position_dodge(0.6)) +
+  scale_y_continuous(labels = label_scientific()) + 
   scale_fill_manual(values = c("mScarlet" = "tomato", "pKM461" = "skyblue")) +
   theme_minimal() +
   labs(title = "Transformation Efficiency for mScarlet and pKM461", 
@@ -53,6 +55,7 @@ combined_plot <- ggplot(summary_stats, aes(x = CuvetteSize, y = mean_CFU, fill =
 interaction_plot <- ggplot(summary_stats, aes(x = CuvetteSize, y = mean_CFU, group = Plasmid, color = Plasmid)) +
   geom_line(size = 1) +
   geom_point(size = 3) +
+  scale_y_continuous(labels = label_scientific()) + 
   scale_color_manual(values = c("mScarlet" = "tomato", "pKM461" = "skyblue")) +
   theme_minimal() +
   labs(title = "Interaction Plot: Cuvette Size Vs Transformation Efficiency",
@@ -77,3 +80,58 @@ print(plot_mean_with_error(summary_stats %>% filter(Plasmid == "pKM461"),
 
 print(combined_plot)
 print(interaction_plot)
+
+print(summary_stats)
+
+unique_cuvettes <- unique(data$CuvetteSize)
+
+for (plasmid in unique(data$Plasmid)) {
+  cat("\nPlasmid:", plasmid, "\n")
+  
+  plasmid_data <- data %>% filter(Plasmid == plasmid)
+  
+  for (i in 1:(length(unique_cuvettes) - 1)) {
+    for (j in (i + 1):length(unique_cuvettes)) {
+      cuvette1 <- unique_cuvettes[i]
+      cuvette2 <- unique_cuvettes[j]
+      
+      test_data <- plasmid_data %>% filter(CuvetteSize %in% c(cuvette1, cuvette2))
+      
+      t_test_result <- t.test(CFU ~ CuvetteSize, data = test_data)
+      
+      cat("T-test between", cuvette1, "and", cuvette2, "for", plasmid, "\n")
+      print(t_test_result)
+    }
+  }
+}
+
+if (!require("pwr")) install.packages("pwr")
+library(pwr)
+
+cohen_d <- function(mean1, mean2, sd1, sd2, n1, n2) {
+  pooled_sd <- sqrt(((n1 - 1) * sd1^2 + (n2 - 1) * sd2^2) / (n1 + n2 - 2))
+  abs(mean1 - mean2) / pooled_sd
+}
+
+for (plasmid in unique(data$Plasmid)) {
+  cat("\nPlasmid:", plasmid, "\n")
+  
+  plasmid_data <- data %>% filter(Plasmid == plasmid)
+  
+  for (i in 1:(length(unique_cuvettes) - 1)) {
+    for (j in (i + 1):length(unique_cuvettes)) {
+      cuvette1 <- unique_cuvettes[i]
+      cuvette2 <- unique_cuvettes[j]
+
+      group1 <- plasmid_data %>% filter(CuvetteSize == cuvette1) %>% pull(CFU)
+      group2 <- plasmid_data %>% filter(CuvetteSize == cuvette2) %>% pull(CFU)
+
+      d <- cohen_d(mean(group1), mean(group2), sd(group1), sd(group2), length(group1), length(group2))
+
+      pwr_result <- pwr.t.test(d = d, sig.level = 0.05, power = 0.95, type = "two.sample")
+
+      cat("Sample size required for", cuvette1, "vs", cuvette2, "for", plasmid, "\n")
+      print(pwr_result)
+    }
+  }
+}
