@@ -1,47 +1,50 @@
 library(dplyr)
-library(tidyr)
 library(ggplot2)
+library(tidyr)
 
 data <- data.frame(
   Resistance = c("200Ω", "400Ω", "600Ω", "800Ω", "1000Ω", "InfiniteΩ"),
-  Mean_Efficiency_mScarlet = c(122998, 253888, 319553, 258208, 141833, mean(mScarlet_infinite)),
-  SD_mScarlet = c(131249, 321197, 433746, 231283, 83547, sd(mScarlet_infinite)),
-  Mean_Efficiency_pKM461 = c(436665, 905105, 1055108, 1320210, 2358000, mean(pKM461_infinite)),
-  SD_pKM461 = c(485283, 492787, 411689, 944184, 2102143, sd(pKM461_infinite)),
-  n_mScarlet = c(6, 6, 6, 6, 3, length(mScarlet_infinite)),
-  n_pKM461 = c(6, 6, 6, 6, 3, length(pKM461_infinite))
+  pKM461_R1 = c(202333.333, 450000, 495333.333, 869333.333, 810000, 147000),
+  pKM461_R2 = c(105333.333, 547666.666, 658000, 588666.666, 1184000, 14500),
+  pKM461_R3 = c(481333.333, 393333.333, 569666.666, 1011333.333, 1218000, 124000),
+  mScarlet_R1 = c(53333.333, 61333.333, 49500, 71333.333, 70500, 25166.666),
+  mScarlet_R2 = c(1500, 26166.666, 48500, 51000, 105166.666, 2000),
+  mScarlet_R3 = c(129666.666, 293333.333, 381333.333, 265000, 133500, 28833.333)
 )
 
-data <- data %>%
+data_long <- data %>%
+  pivot_longer(
+    cols = starts_with("pKM461_") | starts_with("mScarlet_"),
+    names_to = "Plasmid_Replicate",
+    values_to = "Efficiency"
+  ) %>%
   mutate(
-    SE_mScarlet = SD_mScarlet / sqrt(n_mScarlet),
-    SE_pKM461 = SD_pKM461 / sqrt(n_pKM461),
-    CI_Lower_mScarlet = Mean_Efficiency_mScarlet - qt(0.975, df = n_mScarlet - 1) * SE_mScarlet,
-    CI_Upper_mScarlet = Mean_Efficiency_mScarlet + qt(0.975, df = n_mScarlet - 1) * SE_mScarlet,
-    CI_Lower_pKM461 = Mean_Efficiency_pKM461 - qt(0.975, df = n_pKM461 - 1) * SE_pKM461,
-    CI_Upper_pKM461 = Mean_Efficiency_pKM461 + qt(0.975, df = n_pKM461 - 1) * SE_pKM461
+    Plasmid = ifelse(grepl("pKM461", Plasmid_Replicate), "pKM461", "mScarlet"),
+    Replicate = as.numeric(sub(".*_R", "", Plasmid_Replicate))
   )
 
-plot_data <- data %>%
-  pivot_longer(cols = starts_with("Mean_Efficiency"), 
-               names_to = "Plasmid", 
-               values_to = "Mean_Efficiency") %>%
+data_long <- data_long %>%
   mutate(
-    SE = case_when(
-      Plasmid == "Mean_Efficiency_mScarlet" ~ SE_mScarlet,
-      Plasmid == "Mean_Efficiency_pKM461" ~ SE_pKM461
-    ),
-    Plasmid = ifelse(Plasmid == "Mean_Efficiency_mScarlet", "mScarlet", "pKM461")
-  ) %>%
-  mutate(Resistance = factor(Resistance, levels = c("200Ω", "400Ω", "600Ω", "800Ω", "1000Ω", "InfiniteΩ")))
+    Resistance = factor(Resistance, levels = c("200Ω", "400Ω", "600Ω", "800Ω", "1000Ω", "InfiniteΩ"))
+  )
 
-ggplot(plot_data, aes(x = Resistance, y = Mean_Efficiency, fill = Plasmid)) +
-  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.8) +  
+summary_stats <- data_long %>%
+  group_by(Resistance, Plasmid) %>%
+  summarise(
+    Mean_Efficiency = mean(Efficiency, na.rm = TRUE),
+    SD = sd(Efficiency, na.rm = TRUE),
+    n = n(),
+    SE = SD / sqrt(n),
+    .groups = "drop"
+  )
+
+ggplot(summary_stats, aes(x = Resistance, y = Mean_Efficiency, fill = Plasmid)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.8) +
   geom_errorbar(aes(ymin = Mean_Efficiency - SE, ymax = Mean_Efficiency + SE), 
                 position = position_dodge(width = 0.8), width = 0.2) +
   scale_fill_manual(values = c("pKM461" = "skyblue", "mScarlet" = "tomato")) +
   labs(
-    title = "Transformation Efficiency Vs Resistance",
+    title = "Transformation Efficiency vs Resistance",
     x = "Resistance",
     y = "Transformation Efficiency (CFU/µg DNA)",
     fill = "Plasmid"
@@ -49,167 +52,90 @@ ggplot(plot_data, aes(x = Resistance, y = Mean_Efficiency, fill = Plasmid)) +
   theme_minimal() +
   theme(
     plot.title = element_text(hjust = 0.5),
-    axis.text.x = element_text(angle = 45, hjust = 1)  # Rotate x-axis labels for better readability
+    axis.text.x = element_text(angle = 45, hjust = 1)
   )
 
-mScarlet_summary <- data %>%
-  select(Resistance, Mean_Efficiency_mScarlet, SD_mScarlet, SE_mScarlet, n_mScarlet, CI_Lower_mScarlet, CI_Upper_mScarlet) %>%
-  rename(
-    Mean_Efficiency = Mean_Efficiency_mScarlet,
-    SD = SD_mScarlet,
-    SE = SE_mScarlet,
-    n = n_mScarlet,
-    CI_Lower = CI_Lower_mScarlet,
-    CI_Upper = CI_Upper_mScarlet
-  )
+if (!requireNamespace("pwr", quietly = TRUE)) {
+  install.packages("pwr")
+}
+library(pwr)
 
-print("Summary Statistics for mScarlet:")
-print(mScarlet_summary)
+resistance_levels <- levels(data_long$Resistance)
 
-pKM461_summary <- data %>%
-  select(Resistance, Mean_Efficiency_pKM461, SD_pKM461, SE_pKM461, n_pKM461, CI_Lower_pKM461, CI_Upper_pKM461) %>%
-  rename(
-    Mean_Efficiency = Mean_Efficiency_pKM461,
-    SD = SD_pKM461,
-    SE = SE_pKM461,
-    n = n_pKM461,
-    CI_Lower = CI_Lower_pKM461,
-    CI_Upper = CI_Upper_pKM461
-  )
-
-print("Summary Statistics for pKM461:")
-print(pKM461_summary)
-
-data_raw <- data.frame(
-  Resistance = c(
-    rep("200Ω", 6), rep("400Ω", 6), rep("600Ω", 6), rep("800Ω", 6),
-    rep("1000Ω", 3), rep("InfiniteΩ", 6)
-  ),
-  Plasmid = rep(c("pKM461", "mScarlet"), each = 33),
-  Efficiency = c(
-    
-    202666, 580000, 174666, 246660, 56000, 136000,  
-    506666, 1293000, 477333, 1713333, 720000, 186666,  
-    534666, 1446666, 992000, 1640000, 858666, 1420000,   
-    1304000, 2173333, 1048000, 1306666, 978666, 3066666,  
-    1388000, 916000, 4770000,                        
-    241330, 346660, 38000, 20000, 96000, 400000,      
-   
-    60000, 153333, 6000, 0, 172000, 346666,      
-    65333, 180000, 51333, 53333, 293333, 880000,      
-    71333, 126666, 67333, 126666, 345333, 1180000, 
-    118660, 166666, 70666, 133333, 386666, 673333, 
-    75000, 115000, 235500,                         
-    47333, 53330, 1333, 6666, 42000, 733333         
-  )
-)
-
-anova_mScarlet <- aov(Efficiency ~ Resistance, data = data_raw %>% filter(Plasmid == "mScarlet"))
-anova_summary_mScarlet <- summary(anova_mScarlet)
-
-print("ANOVA Results for mScarlet:")
-print(anova_summary_mScarlet)
-
-anova_pKM461 <- aov(Efficiency ~ Resistance, data = data_raw %>% filter(Plasmid == "pKM461"))
-anova_summary_pKM461 <- summary(anova_pKM461)
-
-print("ANOVA Results for pKM461:")
-print(anova_summary_pKM461)
-
-data <- data.frame(
-  Replicate = rep(1:3, each = 10),
-  Resistance = rep(c("200Ω", "400Ω", "600Ω", "800Ω", "InfiniteΩ"), times = 6),
-  Plasmid = rep(c(rep("pKM461", 5), rep("mScarlet", 5)), 3),
-  Efficiency = c(
-
-    2.02666e5, 5.06666e5, 5.34666e5, 1.304e6, 2.4133e5, 6.0e4, 6.5333e4, 7.1333e4, 1.1866e5, 4.7333e4,
-    5.8e5, 1.2933e6, 1.44666e6, 2.17333e5, 3.4666e5, 1.5333e5, 1.8e5, 1.2666e5, 1.666e5, 5.333e4,
-
-    1.74666e5, 4.77333e5, 9.92e5, 1.048e6, 3.8e4, 6.0e3, 5.1333e4, 6.7333e4, 7.0666e4, 1.333e3,
-    2.4666e5, 1.71333e6, 1.64e6, 1.30666e6, 2.0e4, 0, 5.333e4, 1.2666e5, 1.3333e5, 6.666e3,
-
-    5.6e4, 7.2e5, 8.5866e5, 9.78666e5, 9.6e4, 1.72e5, 2.9333e5, 3.45333e5, 3.8666e5, 4.2e4,
-    1.36e6, 7.2e5, 8.5866e5, 3.0666e6, 4.0e5, 3.4666e5, 8.8e5, 1.18e6, 6.7333e5, 7.3333e5
-  )
-)
-
-for (rep in 1:3) {
-  plot <- ggplot(data[data$Replicate == rep & data$Plasmid == "mScarlet", ], 
-                 aes(x = Resistance, y = Efficiency)) +
-    geom_bar(stat = "identity", width = 0.7, fill = "tomato") +
-    labs(
-      title = paste("Transformation Efficiency - mScarlet - Replicate", rep),
-      x = "Resistance",
-      y = "Efficiency (CFU/µg DNA)"
-    ) +
-    theme_minimal() +
-    theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
-  print(plot)
+for (plasmid in unique(data_long$Plasmid)) {
+  cat("\nPlasmid:", plasmid, "\n")
+  
+  # Filter data for the specific plasmid
+  plasmid_data <- data_long %>% filter(Plasmid == plasmid)
+  
+  for (i in 1:(length(resistance_levels) - 1)) {
+    for (j in (i + 1):length(resistance_levels)) {
+      res1 <- resistance_levels[i]
+      res2 <- resistance_levels[j]
+      
+      group1 <- plasmid_data %>% filter(Resistance == res1) %>% pull(Efficiency)
+      group2 <- plasmid_data %>% filter(Resistance == res2) %>% pull(Efficiency)
+      
+      t_test_result <- t.test(group1, group2, var.equal = FALSE)
+      
+      pooled_sd <- sqrt(((length(group1) - 1) * var(group1) + 
+                           (length(group2) - 1) * var(group2)) / 
+                          (length(group1) + length(group2) - 2))
+      cohen_d <- abs(mean(group1) - mean(group2)) / pooled_sd
+      
+      pwr_result <- pwr.t.test(d = cohen_d, sig.level = 0.05, power = 0.95, type = "two.sample")
+      
+      cat("Comparison:", res1, "vs", res2, "\n")
+      cat("Welch's T-Test:\n")
+      print(t_test_result)
+      cat("\nCohen's d:", cohen_d, "\n")
+      cat("Required sample size per group for 95% confidence and p < 0.05:", pwr_result$n, "\n\n")
+    }
+  }
 }
 
-for (rep in 1:3) {
-  plot <- ggplot(data[data$Replicate == rep & data$Plasmid == "pKM461", ], 
-                 aes(x = Resistance, y = Efficiency)) +
-    geom_bar(stat = "identity", width = 0.7, fill = "skyblue") +
+print(summary_stats)
+
+plot_individual_replicates <- function(data, plasmid, replicate, color) {
+  ggplot(data %>% filter(Plasmid == plasmid, Replicate == replicate, Resistance != "1000Ω"), 
+         aes(x = Resistance, y = Efficiency, fill = Resistance)) +
+    geom_bar(stat = "identity", width = 0.7, fill = color) +
     labs(
-      title = paste("Transformation Efficiency - pKM461 - Replicate", rep),
+      title = paste(plasmid, "- Replicate", replicate),
       x = "Resistance",
-      y = "Efficiency (CFU/µg DNA)"
+      y = "Transformation Efficiency (CFU/µg DNA)"
     ) +
     theme_minimal() +
-    theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
-  print(plot)
+    theme(
+      plot.title = element_text(hjust = 0.5),
+      legend.position = "none"
+    ) +
+    scale_y_continuous(labels = scales::scientific)  # Scientific notation for y-axis
 }
 
-summary_data <- summary_data %>%
-  mutate(
-    Resistance = factor(
-      Resistance,
-      levels = c("200Ω", "400Ω", "600Ω", "800Ω", "1000Ω", "InfiniteΩ")
-    )
-  )
+for (plasmid in unique(data_long$Plasmid)) {
+  for (replicate in unique(data_long$Replicate)) {
+    color <- ifelse(plasmid == "pKM461", "skyblue", "tomato")
+    print(plot_individual_replicates(data_long, plasmid, replicate, color))
+  }
+}
 
-plot_summary_mScarlet <- ggplot(
-  summary_data %>% filter(Plasmid == "mScarlet"),
-  aes(x = Resistance, y = Mean_Efficiency, fill = Resistance)
-) +
-  geom_bar(stat = "identity", fill = "tomato", width = 0.7) +
-  geom_errorbar(
-    aes(ymin = Mean_Efficiency - SE, ymax = Mean_Efficiency + SE),
-    width = 0.2
-  ) +
-  labs(
-    title = "Average Transformation Efficiency By Resistance - mScarlet",
-    x = "Resistance",
-    y = "Mean Efficiency (CFU/µg DNA)"
-  ) +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5),
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "none"
-  )
+plot_average_efficiency <- function(data, plasmid, color) {
+  ggplot(data %>% filter(Plasmid == plasmid), aes(x = Resistance, y = Mean_Efficiency, fill = Resistance)) +
+    geom_bar(stat = "identity", width = 0.7, fill = color) +
+    geom_errorbar(aes(ymin = Mean_Efficiency - SE, ymax = Mean_Efficiency + SE), width = 0.2) +
+    labs(
+      title = paste("Average Transformation Efficiency for", plasmid),
+      x = "Resistance",
+      y = "Mean Transformation Efficiency (CFU/µg DNA)"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5),
+      legend.position = "none"
+    ) +
+    scale_y_continuous(labels = scales::scientific)  # Scientific notation for y-axis
+}
 
-plot_summary_pKM461 <- ggplot(
-  summary_data %>% filter(Plasmid == "pKM461"),
-  aes(x = Resistance, y = Mean_Efficiency, fill = Resistance)
-) +
-  geom_bar(stat = "identity", fill = "skyblue", width = 0.7) +
-  geom_errorbar(
-    aes(ymin = Mean_Efficiency - SE, ymax = Mean_Efficiency + SE),
-    width = 0.2
-  ) +
-  labs(
-    title = "Average Transformation Efficiency By Resistance - pKM461",
-    x = "Resistance",
-    y = "Mean Efficiency (CFU/µg DNA)"
-  ) +
-  theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5),
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "none"
-  )
-
-print(plot_summary_mScarlet)
-print(plot_summary_pKM461)
+print(plot_average_efficiency(summary_stats, "pKM461", "skyblue"))
+print(plot_average_efficiency(summary_stats, "mScarlet", "tomato"))
