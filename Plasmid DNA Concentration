@@ -5,15 +5,15 @@ Plasmid <- rep(c("mScarlet", "pKM461"), each = 15)
 Concentration <- factor(rep(c("10ng", "100ng", "300ng", "500ng", "1µg"), times = 6), 
                         levels = c("10ng", "100ng", "300ng", "500ng", "1µg"))
 CFU <- c(
-  3.8e5, 9.14e5, 22.665e3, 6.68e5, 1.324e5, 
-  0, 1.4e4, 21.3335e3, 1.66e5, 3.76e4,       
-  3.0e5, 2.06e5, 90.6665e3, 4.68e4, 3.76e4,  
-  4.0e5, 3.694e6, 1.308e6, 8.34e5, 4.096e5,  
-  0, 1.134e6, 3.56e5, 4.732e5, 4.442e5,      
-  1.16e6, 4.88e5, 1.38e6, 2.22e5, 1.302e5    
+  190000, 457000, 14333.333, 334000, 66200, 
+  0, 7000, 37666.666, 83200, 15100,       
+  150000, 103000, 45333.333, 23400, 18800,  
+  20000, 1847000, 654000, 417000, 204900,  
+  0, 567000, 178000, 236600, 222100,      
+  580000, 244000, 345000, 111000, 65100    
 )
 
-Replicate <- rep(rep(1:3, each = 5), times = 2)  # Correctly map replicates
+Replicate <- rep(rep(1:3, each = 5), times = 2) 
 
 data <- data.frame(Plasmid, Concentration, CFU, Replicate)
 
@@ -91,3 +91,42 @@ print(plot_mScarlet)
 print(plot_pKM461)
 print(combined_plot)
 print(interaction_plot)
+
+library(pwr)
+
+unique_concentrations <- unique(data$Concentration)
+
+for (plasmid in unique(data$Plasmid)) {
+  cat("\nPlasmid:", plasmid, "\n")
+  
+  plasmid_data <- data %>% filter(Plasmid == plasmid)
+  
+  for (i in 1:(length(unique_concentrations) - 1)) {
+    for (j in (i + 1):length(unique_concentrations)) {
+      conc1 <- unique_concentrations[i]
+      conc2 <- unique_concentrations[j]
+      
+      group1 <- plasmid_data %>% filter(Concentration == conc1) %>% pull(CFU)
+      group2 <- plasmid_data %>% filter(Concentration == conc2) %>% pull(CFU)
+      
+      t_test_result <- t.test(group1, group2, var.equal = FALSE)
+      
+      pooled_sd <- sqrt(((length(group1) - 1) * var(group1) + (length(group2) - 1) * var(group2)) / 
+                          (length(group1) + length(group2) - 2))
+      cohen_d <- abs(mean(group1) - mean(group2)) / pooled_sd
+      
+      if (!is.na(cohen_d) && cohen_d > 0) {
+        pwr_result <- pwr.t.test(d = cohen_d, sig.level = 0.05, power = 0.95, type = "two.sample")
+        sample_size <- pwr_result$n
+      } else {
+        sample_size <- NA
+      }
+      
+      cat("Comparison:", as.character(conc1), "vs", as.character(conc2), "\n")
+      cat("Welch's T-Test:\n")
+      print(t_test_result)
+      cat("\nCohen's d:", cohen_d, "\n")
+      cat("Required sample size per group for 95% confidence and p < 0.05:", sample_size, "\n\n")
+    }
+  }
+}
