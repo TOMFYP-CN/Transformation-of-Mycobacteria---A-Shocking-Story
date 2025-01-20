@@ -1,83 +1,122 @@
 library(ggplot2)
 library(dplyr)
-
-# Data
-Wasabi_Fresh_1 <- c(346666.66, 1180000)
-Wasabi_Fresh_2 <- c(259666.66, 234666.66)
-Wasabi_Frozen_1 <- c(1406666.66, 1066666.66)
-Wasabi_Frozen_2 <- c(462666.66, 390000)
+library(pwr)
 
 data <- data.frame(
-  Value = c(Wasabi_Fresh_1, Wasabi_Frozen_1, Wasabi_Fresh_2, Wasabi_Frozen_2),
+  Value = c(
+    c(173333.333, 590000),
+    c(703333.333, 533333.333),
+    c(129833.333, 117333.333),
+    c(231333.333, 195000)
+  ),
   Group = rep(c("Fresh 1", "Frozen 1", "Fresh 2", "Frozen 2"), each = 2)
 )
 
 summary_stats <- data %>%
   group_by(Group) %>%
   summarise(
-    mean_value = mean(Value),
-    sd_value = sd(Value),
+    Mean_Value = mean(Value),
+    SD_Value = sd(Value),
     n = n(),
-    se_value = sd_value / sqrt(n),
-    lower_95ci = mean_value - qt(0.975, df = n - 1) * se_value,
-    upper_95ci = mean_value + qt(0.975, df = n - 1) * se_value
+    SE_Value = SD_Value / sqrt(n),
+    .groups = "drop"
   )
 
-cat("Summary Statistics:\n")
-print(summary_stats)
+summary_stats <- summary_stats %>%
+  mutate(
+    Combined_Group = case_when(
+      Group %in% c("Fresh 1", "Fresh 2") ~ "Fresh 1 & 2",
+      Group %in% c("Frozen 1", "Frozen 2") ~ "Frozen 1 & 2",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  group_by(Combined_Group) %>%
+  summarise(
+    Mean_Value = mean(Mean_Value, na.rm = TRUE),
+    SD_Value = sd(Mean_Value, na.rm = TRUE),
+    n = sum(n, na.rm = TRUE),
+    SE_Value = sqrt(sum((SE_Value)^2, na.rm = TRUE)),
+    .groups = "drop"
+  ) %>%
+  bind_rows(summary_stats) %>%
+  arrange(Combined_Group)
 
-anova_fresh1_frozen1 <- aov(Value ~ Group, data = data %>% filter(Group %in% c("Fresh 1", "Frozen 1")))
-anova_fresh2_frozen2 <- aov(Value ~ Group, data = data %>% filter(Group %in% c("Fresh 2", "Frozen 2")))
-
-cat("\nANOVA Results for Fresh 1 vs Frozen 1:\n")
-print(summary(anova_fresh1_frozen1))
-cat("\nANOVA Results for Fresh 2 vs Frozen 2:\n")
-print(summary(anova_fresh2_frozen2))
-
-combined_summary <- data.frame(
-  Group = c("Fresh (Avg)", "Frozen (Avg)"),
-  mean_value = c(
-    mean(summary_stats %>% filter(grepl("Fresh", Group)) %>% pull(mean_value)),
-    mean(summary_stats %>% filter(grepl("Frozen", Group)) %>% pull(mean_value))
-  ),
-  se_value = c(
-    sqrt(sum((summary_stats %>% filter(grepl("Fresh", Group)) %>% pull(se_value))^2)),
-    sqrt(sum((summary_stats %>% filter(grepl("Frozen", Group)) %>% pull(se_value))^2))
+combined_summary <- data %>%
+  mutate(
+    Condition = ifelse(grepl("Fresh", Group), "Fresh", "Frozen")
+  ) %>%
+  group_by(Condition) %>%
+  summarise(
+    Mean_Value = mean(Value),
+    SD_Value = sd(Value),
+    n = n(),
+    SE_Value = SD_Value / sqrt(n),
+    .groups = "drop"
   )
-)
 
-default_theme <- theme_minimal() +
-  theme(
-    axis.title = element_text(size = 14),
-    axis.text = element_text(size = 12),
-    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
-    legend.position = "none"
-  )
-
-plots <- lapply(c("Fresh 1 vs Frozen 1", "Fresh 2 vs Frozen 2", "Combined Fresh vs Frozen"), function(title) {
-  if (title == "Combined Fresh vs Frozen") {
-    subset_data <- combined_summary
-    title <- "Fresh vs Frozen"  
-  } else {
-    groups <- unlist(strsplit(title, " vs "))
-    subset_data <- summary_stats %>% filter(Group %in% groups)
-  }
-  
-  ggplot(subset_data, aes(x = Group, y = mean_value)) +
-    geom_bar(stat = "identity", aes(fill = Group), width = 0.6, show.legend = FALSE) +
-    geom_errorbar(
-      aes(ymin = mean_value - se_value, ymax = mean_value + se_value),
-      width = 0.2
-    ) +
-    scale_fill_manual(values = c("Fresh 1" = "green", "Frozen 1" = "lightblue", 
-                                 "Fresh 2" = "green", "Frozen 2" = "lightblue", 
-                                 "Fresh (Avg)" = "green", "Frozen (Avg)" = "lightblue")) +
+plot_groups <- function(data, x_col, title, fill_colors, scientific = FALSE) {
+  plot <- ggplot(data, aes_string(x = x_col, y = "Mean_Value", fill = x_col)) +
+    geom_bar(stat = "identity", width = 0.6, show.legend = FALSE) +
+    geom_errorbar(aes(ymin = Mean_Value - SE_Value, ymax = Mean_Value + SE_Value), width = 0.2) +
+    scale_fill_manual(values = fill_colors) +
     labs(
       title = title,
-      y = "Transformation Efficiency (CFU/\u00b5g)" 
+      x = "",
+      y = "Transformation Efficiency (CFU/\u00b5g)"
     ) +
-    default_theme +
-    theme(axis.title.x = element_blank()) 
-})
+    theme_minimal() +
+    theme(
+      axis.title = element_text(size = 14),
+      axis.text = element_text(size = 12),
+      plot.title = element_text(hjust = 0.5, size = 16, face = "bold")
+    )
+  if (scientific) {
+    plot <- plot + scale_y_continuous(labels = scales::scientific)
+  }
+  return(plot)
+}
 
-lapply(plots, print)
+plot_1 <- plot_groups(
+  summary_stats %>% filter(Group %in% c("Fresh 1", "Frozen 1")),
+  "Group",
+  "Fresh 1 vs Frozen 1",
+  c("Fresh 1" = "green", "Frozen 1" = "lightblue")
+)
+
+plot_2 <- plot_groups(
+  summary_stats %>% filter(Group %in% c("Fresh 2", "Frozen 2")),
+  "Group",
+  "Fresh 2 vs Frozen 2",
+  c("Fresh 2" = "green", "Frozen 2" = "lightblue"),
+  scientific = TRUE
+)
+
+plot_combined <- plot_groups(
+  combined_summary,
+  "Condition",
+  "Fresh vs Frozen",
+  c("Fresh" = "green", "Frozen" = "lightblue")
+)
+
+print(plot_1)
+print(plot_2)
+print(plot_combined)
+
+fresh_values <- data %>% filter(grepl("Fresh", Group)) %>% pull(Value)
+frozen_values <- data %>% filter(grepl("Frozen", Group)) %>% pull(Value)
+
+t_test_result <- t.test(fresh_values, frozen_values, var.equal = FALSE)
+
+pooled_sd <- sqrt(((length(fresh_values) - 1) * var(fresh_values) + 
+                     (length(frozen_values) - 1) * var(frozen_values)) / 
+                    (length(fresh_values) + length(frozen_values) - 2))
+cohen_d <- abs(mean(fresh_values) - mean(frozen_values)) / pooled_sd
+
+pwr_result <- pwr.t.test(d = cohen_d, sig.level = 0.05, power = 0.95, type = "two.sample")
+
+cat("Welch's T-Test (Fresh vs Frozen):\n")
+print(t_test_result)
+cat("\nCohen's d (Fresh vs Frozen):", cohen_d, "\n")
+cat("Required sample size per group for 95% confidence and p < 0.05:", pwr_result$n, "\n")
+
+print(summary_stats)
