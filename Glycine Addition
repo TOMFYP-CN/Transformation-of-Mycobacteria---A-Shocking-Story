@@ -8,15 +8,15 @@ replicates_data <- data.frame(
     rep("pKM461_No_Glycine", 5), rep("mScarlet_No_Glycine", 6)
   ),
   Efficiency = c(
-    7.1733e6, 8.16e6, 5.3066e6, 5.56e6,      # pKM461 Replicates 1 & 2
-    1.1733e6, 2.0666e6, 1.20266e6, 3.6e6,    # pKM461 Replicates 3 & 4
-    1.312e6, 3.56e6, 4.1466e6,               # Remaining pKM461
-    1.2866e5, 1.533e5, 1.4066e5, 2.8e5,      # mScarlet Replicates 1 & 2
-    1.24e5, 1.8e5, 2.0733e5, 3.266e5,        # Remaining mScarlet
-    1.1266e5, 1.1333e5, 1.6066e5, 2.6e5,     # mScarlet Replicates 3 & 4
-    1.3466e5, 2.7333e5, 1.2667e5, 1.8667e5,  # Remaining mScarlet
-    5.06e5, 2.27e6, 4.52e5, 1.38e6, 4.77e6,  # pKM461 No Glycine
-    6.0e4, 9.0e4, 5.0e4, 1.8e5, 7.1e4, 4.0e5 # mScarlet No Glycine
+    3586666.666, 4080000, 2653333.333, 2780000,  
+    586666.666, 1033333.333, 468000, 1900000, 
+    656000, 1780000, 2073333.333,               
+    64333.333, 76666.666, 70333.333, 140000, 
+    62000, 90000, 103666.666, 163333.333,        
+    56333.333, 56666.666, 80333.333, 130000, 
+    67333.333, 136666.666, 63333.333, 93333.333,  
+    168666.666, 756666.666, 150666.666, 460000, 1590000,
+    20000, 30000, 16666.666, 60000, 23666.666, 133333.333 
   )
 )
 
@@ -31,8 +31,6 @@ summary_data <- replicates_data %>%
     CI_Upper = Mean_Efficiency + qt(0.975, df = n - 1) * SE,
     .groups = "drop"
   )
-
-print(summary_data)
 
 combined_data <- replicates_data %>%
   mutate(Combined_Group = case_when(
@@ -52,14 +50,13 @@ combined_data <- replicates_data %>%
     .groups = "drop"
   )
 
-print(combined_data)
-
 plot_comparison <- function(data, groups, title, x_labels, colors) {
   ggplot(data %>% filter(Combined_Group %in% groups), aes(x = Combined_Group, y = Mean_Efficiency, fill = Combined_Group)) +
     geom_bar(stat = "identity", width = 0.5) +
     geom_errorbar(aes(ymin = Mean_Efficiency - SE, ymax = Mean_Efficiency + SE), width = 0.2) +
     scale_fill_manual(values = colors) +
     scale_x_discrete(labels = x_labels) +
+    scale_y_continuous(labels = scales::scientific) + 
     labs(title = title, x = "", y = "Transformation Efficiency (CFU/µg)") +
     theme_minimal() +
     theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
@@ -81,50 +78,36 @@ plot_combined_mScarlet <- plot_comparison(
   c("mScarlet + Glycine" = "tomato", "mScarlet - No Glycine" = "lightgray")
 )
 
-print(plot_combined_pKM461)
-print(plot_combined_mScarlet)
-
-plot_individual_comparison <- function(data, groups, title, x_labels, colors) {
-  ggplot(data %>% filter(Group %in% groups), aes(x = Group, y = Mean_Efficiency, fill = Group)) +
-    geom_bar(stat = "identity", width = 0.5) +
-    geom_errorbar(aes(ymin = Mean_Efficiency - SE, ymax = Mean_Efficiency + SE), width = 0.2) +
-    scale_fill_manual(values = colors) +
-    scale_x_discrete(labels = x_labels) +
-    labs(title = title, x = "", y = "Transformation Efficiency (CFU/µg)") +
-    theme_minimal() +
-    theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
-}
-
 plot_pKM461_1_2 <- plot_individual_comparison(
   summary_data,
-  c("pKM461_Replicates_1_2", "pKM461_No_Glycine"),
-  "pKM461 Replicates 1 & 2",
+  c("pKM461_No_Glycine", "pKM461_Replicates_1_2"),
+  "pKM461 Replicates 1 & 2: No Glycine vs Glycine",
   c("No Glycine", "Glycine (1.5%)"),
-  c("pKM461_Replicates_1_2" = "skyblue", "pKM461_No_Glycine" = "lightgray")
+  c("pKM461_No_Glycine" = "lightgray", "pKM461_Replicates_1_2" = "skyblue")
 )
 
 plot_pKM461_3_4 <- plot_individual_comparison(
   summary_data,
-  c("pKM461_Replicates_3_4", "pKM461_No_Glycine"),
-  "pKM461 Replicates 3 & 4",
+  c("pKM461_No_Glycine", "pKM461_Replicates_3_4"),
+  "pKM461 Replicates 3 & 4: No Glycine vs Glycine",
   c("No Glycine", "Glycine (1.5%)"),
-  c("pKM461_Replicates_3_4" = "skyblue", "pKM461_No_Glycine" = "lightgray")
+  c("pKM461_No_Glycine" = "lightgray", "pKM461_Replicates_3_4" = "skyblue")
 )
 
 plot_mScarlet_1_2 <- plot_individual_comparison(
   summary_data,
-  c("mScarlet_Replicates_1_2", "mScarlet_No_Glycine"),
-  "mScarlet Replicates 1 & 2",
+  c("mScarlet_No_Glycine", "mScarlet_Replicates_1_2"),
+  "mScarlet Replicates 1 & 2: No Glycine vs Glycine",
   c("No Glycine", "Glycine (1.5%)"),
-  c("mScarlet_Replicates_1_2" = "tomato", "mScarlet_No_Glycine" = "lightgray")
+  c("mScarlet_No_Glycine" = "lightgray", "mScarlet_Replicates_1_2" = "tomato")
 )
 
 plot_mScarlet_3_4 <- plot_individual_comparison(
   summary_data,
-  c("mScarlet_Replicates_3_4", "mScarlet_No_Glycine"),
-  "mScarlet Replicates 3 & 4",
+  c("mScarlet_No_Glycine", "mScarlet_Replicates_3_4"),
+  "mScarlet Replicates 3 & 4: No Glycine vs Glycine",
   c("No Glycine", "Glycine (1.5%)"),
-  c("mScarlet_Replicates_3_4" = "tomato", "mScarlet_No_Glycine" = "lightgray")
+  c("mScarlet_No_Glycine" = "lightgray", "mScarlet_Replicates_3_4" = "tomato")
 )
 
 print(plot_pKM461_1_2)
@@ -132,22 +115,41 @@ print(plot_pKM461_3_4)
 print(plot_mScarlet_1_2)
 print(plot_mScarlet_3_4)
 
-anova_data_mScarlet <- replicates_data %>%
-  filter(Group %in% c("mScarlet_Replicates_1_2", "mScarlet_Replicates_3_4", "mScarlet_No_Glycine")) %>%
-  mutate(Condition = case_when(
-    Group %in% c("mScarlet_Replicates_1_2", "mScarlet_Replicates_3_4") ~ "Glycine (1.5%)",
-    Group == "mScarlet_No_Glycine" ~ "No Glycine"
-  ))
+print(plot_combined_pKM461)
+print(plot_combined_mScarlet)
 
-anova_data_pKM461 <- replicates_data %>%
-  filter(Group %in% c("pKM461_Replicates_1_2", "pKM461_Replicates_3_4", "pKM461_No_Glycine")) %>%
-  mutate(Condition = case_when(
-    Group %in% c("pKM461_Replicates_1_2", "pKM461_Replicates_3_4") ~ "Glycine (1.5%)",
-    Group == "pKM461_No_Glycine" ~ "No Glycine"
-  ))
+pKM461_glycine <- replicates_data %>%
+  filter(Group %in% c("pKM461_Replicates_1_2", "pKM461_Replicates_3_4")) %>%
+  pull(Efficiency)
+pKM461_no_glycine <- replicates_data %>%
+  filter(Group == "pKM461_No_Glycine") %>%
+  pull(Efficiency)
 
-anova_mScarlet <- aov(Efficiency ~ Condition, data = anova_data_mScarlet)
-summary(anova_mScarlet)
+pKM461_t_test <- t.test(pKM461_glycine, pKM461_no_glycine, var.equal = FALSE)
 
-anova_pKM461 <- aov(Efficiency ~ Condition, data = anova_data_pKM461)
-summary(anova_pKM461)
+pKM461_pooled_sd <- sqrt(((length(pKM461_glycine) - 1) * var(pKM461_glycine) +
+                            (length(pKM461_no_glycine) - 1) * var(pKM461_no_glycine)) /
+                           (length(pKM461_glycine) + length(pKM461_no_glycine) - 2))
+pKM461_cohen_d <- abs(mean(pKM461_glycine) - mean(pKM461_no_glycine)) / pKM461_pooled_sd
+
+cat("pKM461 Comparison (Glycine vs No Glycine):\n")
+print(pKM461_t_test)
+cat("\nCohen's d for pKM461:", pKM461_cohen_d, "\n\n")
+
+mScarlet_glycine <- replicates_data %>%
+  filter(Group %in% c("mScarlet_Replicates_1_2", "mScarlet_Replicates_3_4")) %>%
+  pull(Efficiency)
+mScarlet_no_glycine <- replicates_data %>%
+  filter(Group == "mScarlet_No_Glycine") %>%
+  pull(Efficiency)
+
+mScarlet_t_test <- t.test(mScarlet_glycine, mScarlet_no_glycine, var.equal = FALSE)
+
+mScarlet_pooled_sd <- sqrt(((length(mScarlet_glycine) - 1) * var(mScarlet_glycine) +
+                              (length(mScarlet_no_glycine) - 1) * var(mScarlet_no_glycine)) /
+                             (length(mScarlet_glycine) + length(mScarlet_no_glycine) - 2))
+mScarlet_cohen_d <- abs(mean(mScarlet_glycine) - mean(mScarlet_no_glycine)) / mScarlet_pooled_sd
+
+cat("mScarlet Comparison (Glycine vs No Glycine):\n")
+print(mScarlet_t_test)
+cat("\nCohen's d for mScarlet:", mScarlet_cohen_d, "\n\n")
